@@ -36,7 +36,7 @@ class DefaultYaAiClient implements YaAiClient {
 	}
 
 	@Override
-	public String talk(String prompt) {
+	public String chat(String prompt) {
 		return this.aiClient.generate(prompt);
 	}
 

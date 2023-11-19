@@ -9,7 +9,7 @@ public interface YaAiClient {
 
 	String transcribe(Resource audio);
 
-	String talk(String prompt);
+	String chat(String prompt);
 
 	Resource render(String prompt, ImageSize imageSize);
 

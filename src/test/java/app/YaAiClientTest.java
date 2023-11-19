@@ -29,7 +29,7 @@ class YaAiClientTest {
 
 	@Test
 	void talk(@Autowired YaAiClient ya) {
-		var joke = ya.talk("tell me a joke?");
+		var joke = ya.chat("tell me a joke?");
 		Assertions.assertTrue(StringUtils.hasText(joke));
 	}
 
