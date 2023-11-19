@@ -24,17 +24,18 @@ class YaAiClientTest {
 	void transcribe(@Autowired YaAiClient yac) {
 		var transcript = yac.transcribe(new ClassPathResource("sample-audio.mp3"));
 		Assertions.assertTrue(StringUtils.hasText(transcript));
-		log.info("the transcript is [" + transcript + "]");
+		log("transcribe", transcript);
 	}
 
 	@Test
 	void talk(@Autowired YaAiClient ya) {
 		var joke = ya.chat("tell me a joke?");
 		Assertions.assertTrue(StringUtils.hasText(joke));
+		log("talk", joke);
 	}
 
 	@Test
-	void image(@Autowired YaAiClient yaaClient) throws Exception {
+	void render(@Autowired YaAiClient yaaClient) throws Exception {
 		var prompt = """
 				Thumbnail Design: A vibrant background with code snippets and the Java coffee cup logo.
 				 The text  "Mastering Java 21 & Spring" in bold, modern font. Icons representing different IDEs
@@ -42,12 +43,16 @@ class YaAiClientTest {
 				 a video tutorial.
 				""";
 		var generationResponse = yaaClient.render(prompt, ImageSize.SIZE_1024x1024);
-		log.info(generationResponse.toString());
+		log("render", generationResponse.toString());
 		try (var inputStream = generationResponse.getInputStream();
 				var outputStream = new FileOutputStream(
 						SystemPropertyUtils.resolvePlaceholders("${HOME}/Desktop/out.jpg"))) {
 			FileCopyUtils.copy(inputStream, outputStream);
 		}
+	}
+
+	private void log(String m, Object o) {
+		log.info(m + " [" + o + "]");
 	}
 
 }
