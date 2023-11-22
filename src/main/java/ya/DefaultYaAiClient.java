@@ -12,7 +12,7 @@ import java.util.UUID;
 
 class DefaultYaAiClient implements YaAiClient {
 
-	private static final String OPENAI_API_URL = "https://api.openai.com/v1/images/generations";
+	private static final String OPENAI_API_IMAGES_URL = "https://api.openai.com/v1/images/generations";
 
 	private final RestTemplate restTemplate;
 
@@ -42,14 +42,13 @@ class DefaultYaAiClient implements YaAiClient {
 
 	@Override
 	public Resource render(String prompt, ImageSize imageSize) {
-
 		var headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 		headers.set("Authorization", "Bearer " + openaiApiKey);
 
 		var request = new ImageGenerationRequest("dall-e-3", prompt, 1, imageSize.value());
 		var entity = new HttpEntity<>(request, headers);
-		var response = restTemplate.postForEntity(OPENAI_API_URL, entity, ImageGenerationResponse.class);
+		var response = restTemplate.postForEntity(OPENAI_API_IMAGES_URL, entity, ImageGenerationResponse.class);
 		var igr = response.getBody();
 		if (igr != null && igr.data() != null && !igr.data().isEmpty()) {
 			var img = igr.data().iterator().next();
