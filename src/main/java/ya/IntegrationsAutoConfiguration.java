@@ -41,7 +41,8 @@ class IntegrationsAutoConfiguration {
 				ensure(project);
 				var payloadToProcess = new File(project, payload.getName());
 				Assert.state(payload.renameTo(payloadToProcess) && payloadToProcess.exists(),
-						"the file you moved to [" + payloadToProcess.getAbsolutePath() + "] does not exist");
+						"the file [" + payload.getAbsolutePath() + "] you moved to ["
+								+ payloadToProcess.getAbsolutePath() + "] does not exist");
 				var youtubeAnalysis = yac.analyzeVideo(id, new FileSystemResource(payloadToProcess));
 				handleYoutubeAnalysis(project, youtubeAnalysis, objectMapper);
 				return null;

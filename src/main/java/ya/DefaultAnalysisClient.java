@@ -71,6 +71,7 @@ class DefaultAnalysisClient implements AnalysisClient {
 					""";
 
 			var analysis = "<analysis>" + this.yac.chat(questions.formatted(transcript)) + "</analysis>";
+			System.out.println(analysis);
 			var factory = DocumentBuilderFactory.newInstance();
 			var builder = factory.newDocumentBuilder();
 			var document = builder.parse(new ByteArrayInputStream(analysis.getBytes()));
@@ -87,6 +88,9 @@ class DefaultAnalysisClient implements AnalysisClient {
 			replace(map, "content-enhancement",
 					input -> input.contains("\n") ? input.split("\n") : new String[] { input });
 			replace(map, "seo-tags", seoTags -> seoTags.contains(",") ? seoTags.split(",") : new String[] { seoTags });
+
+			for (var st : (String[]) map.get("seo-tags"))
+				System.out.println("st: " + st);
 
 			var thumbnailPrompt = (String) (map.getOrDefault("thumbnail-design", null));
 			var thumbResource = (Resource) (thumbnailPrompt == null ? null
