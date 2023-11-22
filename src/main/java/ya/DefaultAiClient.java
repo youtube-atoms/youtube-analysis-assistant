@@ -1,6 +1,5 @@
 package ya;
 
-import org.springframework.ai.client.AiClient;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpEntity;
@@ -10,19 +9,19 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.UUID;
 
-class DefaultYaAiClient implements YaAiClient {
+class DefaultAiClient implements AiClient {
 
 	private static final String OPENAI_API_IMAGES_URL = "https://api.openai.com/v1/images/generations";
 
 	private final RestTemplate restTemplate;
 
-	private final AiClient aiClient;
+	private final org.springframework.ai.client.AiClient aiClient;
 
 	private final String openaiApiKey;
 
 	private final TranscriptionClient transcriptionClient;
 
-	DefaultYaAiClient(RestTemplate restTemplate, AiClient aiClient, String openaiApiKey,
+	DefaultAiClient(RestTemplate restTemplate, org.springframework.ai.client.AiClient aiClient, String openaiApiKey,
 			TranscriptionClient transcriptionClient) {
 		this.restTemplate = restTemplate;
 		this.aiClient = aiClient;

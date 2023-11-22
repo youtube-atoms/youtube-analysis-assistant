@@ -7,16 +7,10 @@ import java.io.File;
 import java.time.Duration;
 
 @ConfigurationProperties(prefix = "ya")
-record YaProperties(@NonNull Whisper whisper, @NonNull Duration clientTimeout, @NonNull Application application) {
+record YoutubeAnalysisProperties(@NonNull Whisper whisper, @NonNull Duration clientTimeout,
+		@NonNull Application application) {
 
-	record Application(@NonNull Audio audio, @NonNull Video video) {
-
-		record Audio(File input, File output) {
-		}
-
-		record Video(File input, File output) {
-		}
-
+	record Application(@NonNull File videos) {
 	}
 
 	record Whisper(@NonNull Rabbitmq rabbitmq, @NonNull S3 s3) {

@@ -18,11 +18,12 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
 @Configuration
-@EnableConfigurationProperties(YaProperties.class)
+@EnableConfigurationProperties(YoutubeAnalysisProperties.class)
 class YaAutoConfiguration {
 
 	@Bean
-	ApplicationRunner rabbitMqDestinationInitializationRunner(AmqpAdmin amqpAdmin, YaProperties properties) {
+	ApplicationRunner rabbitMqDestinationInitializationRunner(AmqpAdmin amqpAdmin,
+			YoutubeAnalysisProperties properties) {
 		return args -> {
 
 			if (!properties.whisper().rabbitmq().initializeBroker())
@@ -40,7 +41,7 @@ class YaAutoConfiguration {
 	}
 
 	@Bean
-	S3Client s3Client(YaProperties properties) {
+	S3Client s3Client(YoutubeAnalysisProperties properties) {
 		var api = properties.whisper();
 		var key = api.s3().accessKey();
 		var secret = api.s3().accessKeySecret();
@@ -54,16 +55,16 @@ class YaAutoConfiguration {
 
 	@Bean
 	TranscriptionClient transcriptClient(S3Client s3, AmqpTemplate template, ObjectMapper objectMapper,
-			YaProperties properties) {
+			YoutubeAnalysisProperties properties) {
 		var api = properties.whisper();
 		return new TranscriptionClient(objectMapper, s3, template, api.s3().audioBucket(),
 				api.rabbitmq().requestsQueue());
 	}
 
 	@Bean
-	DefaultYaAiClient defaultYaClient(RestTemplate restTemplate, AiClient aiClient, OpenAiProperties aiProperties,
+	DefaultAiClient defaultYaClient(RestTemplate restTemplate, AiClient aiClient, OpenAiProperties aiProperties,
 			TranscriptionClient tc) {
-		return new DefaultYaAiClient(restTemplate, aiClient, aiProperties.getApiKey(), tc);
+		return new DefaultAiClient(restTemplate, aiClient, aiProperties.getApiKey(), tc);
 	}
 
 	@Bean
@@ -72,7 +73,7 @@ class YaAutoConfiguration {
 	}
 
 	@Bean
-	RestTemplate restTemplate(RestTemplateBuilder restTemplateBuilder, YaProperties properties,
+	RestTemplate restTemplate(RestTemplateBuilder restTemplateBuilder, YoutubeAnalysisProperties properties,
 			ClientHttpRequestFactory jdkClientHttpRequestFactory) {
 		return restTemplateBuilder.requestFactory(() -> jdkClientHttpRequestFactory)
 			.setReadTimeout(properties.clientTimeout()) //

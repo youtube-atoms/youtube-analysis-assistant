@@ -1,142 +1,96 @@
 package ya;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.InitializingBean;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.integration.core.GenericHandler;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.integration.dsl.IntegrationFlow;
-import org.springframework.integration.file.FileNameGenerator;
 import org.springframework.integration.file.dsl.Files;
-import org.springframework.integration.file.support.FileExistsMode;
-import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 import org.springframework.util.FileCopyUtils;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.*;
-import java.util.function.Predicate;
+import java.io.FileOutputStream;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 
 @Configuration
 class IntegrationsAutoConfiguration {
 
-	private final Engine engine;
+	@Bean
+	IntegrationFlow incomingVideoIntegration(YoutubeAnalysisProperties properties, AnalysisClient yac,
+			ObjectMapper objectMapper) {
+		var in = properties.application().videos();
+		for (var f : List.of(in))
+			this.ensure(f);
+		var inboundChannelAdapterSpec = Files//
+			.inboundAdapter(in)//
+			.filterFunction(file -> file.getName().toLowerCase(Locale.ROOT).endsWith(".mp4"))//
+			.autoCreateDirectory(true)//
+			.preventDuplicates(true);
+		return IntegrationFlow//
+			.from(inboundChannelAdapterSpec)//
+			.handle(File.class, (payload, headers) -> {
+				var id = Objects.requireNonNull(headers.getId()).toString();
+				var project = new File(in, id);
+				ensure(project);
+				var payloadToProcess = new File(project, payload.getName());
+				Assert.state(payload.renameTo(payloadToProcess) && payloadToProcess.exists(),
+						"the file you moved to [" + payloadToProcess.getAbsolutePath() + "] does not exist");
+				var youtubeAnalysis = yac.analyzeVideo(id, new FileSystemResource(payloadToProcess));
+				handleYoutubeAnalysis(project, youtubeAnalysis, objectMapper);
+				return null;
+			})//
+			.get();
+	}
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+	private Resource resourceFor(String transcript) {
+		return new InputStreamResource(new ByteArrayInputStream(transcript.getBytes()));
+	}
 
-    private final Set<String> audio = Set.of("mp3", "wav");
+	private void handleYoutubeAnalysis(File root, AnalysisClient.Analysis youtubeAnalysis, ObjectMapper objectMapper) {
+		try {
+			var caJson = objectMapper.writeValueAsString(youtubeAnalysis.analysis());
 
-    private final Set<String> video = Set.of("mp4", "mov");
+			var map = Map.of("image.webp", youtubeAnalysis.image(), //
+					"transcript.txt", resourceFor(youtubeAnalysis.transcript()), //
+					"analysis.json", resourceFor(caJson), //
+					"audio.mp3", youtubeAnalysis.audio()//
+			); //
+			for (var k : map.keySet()) {
+				try (var inputStream = map.get(k).getInputStream();
+						var outputStream = new FileOutputStream(new File(root, k))) {
+					FileCopyUtils.copy(inputStream, outputStream);
+				}
+			}
+		} //
+		catch (Throwable throwable) {
+			throw new RuntimeException("couldn't process the " + AnalysisClient.Analysis.class.getName());
+		}
 
-	IntegrationsAutoConfiguration(Engine engine) {
-		this.engine = engine;
+	}
+
+	private void ensure(File d) {
+		Assert.notNull(d, "the directory must be non-null");
+		if (d.isDirectory())
+			d = d.getParentFile();
+		Assert.state(d.exists() || d.mkdirs(),
+				"the directory [" + d.getAbsolutePath() + "] does not exist and could not be created");
 	}
 
 	@Bean
-    InitializingBean directoryInitialization(YaProperties properties) {
-        return () -> {
+	AnalysisClient yaClient(AiClient yac, Engine engine, ObjectMapper objectMapper) {
+		return new DefaultAnalysisClient(yac, engine, objectMapper);
+	}
 
-            record IO(File in, File out) {
-            }
-
-            var video = properties.application().video();
-            var audio = properties.application().audio();
-            var map = Map.of(//
-                    "video", new IO(video.input(), video.output()), //
-                    "audio", new IO(audio.input(), audio.output())//
-            );
-            for (var k : map.keySet()) {
-                var io = map.get(k);
-                log.info("==================================");
-                log.info(k.toUpperCase(Locale.ROOT));
-                log.info(k + '=' + io);
-                for (var f : Set.of(io.in(), io.out()))
-                    Assert.state(f.exists() || f.mkdirs(), "the directory [" + f.getAbsolutePath() + "] must exist");
-            }
-        };
-    }
-
-    @Bean
-    IntegrationFlow videoToAudioIntegrationFlow(YaProperties properties) {
-        var video = properties.application().video();
-        return integrationFlow(video.input(), video.output(), file -> engine.isValidFile(file, this.video),
-                (payload, headers) -> engine. videoToAudio(payload, Objects.requireNonNull(headers.getId()).toString()),
-                message -> message.getHeaders().getId() + ".mp3");
-    }
-
-    @Bean
-    IntegrationFlow audioToTranscriptIntegrationFlow(YaProperties properties, YaAiClient ai) {
-        var audio = properties.application().audio();
-        return integrationFlow(audio.input(), audio.output(), f -> engine.isValidFile(f, this.audio),
-                (payload, headers) -> engine.audioToTranscript(ai, payload,
-                        Objects.requireNonNull(headers.getId()).toString()),
-                message -> message.getHeaders().getId() + ".txt");
-    }
-
-    private IntegrationFlow integrationFlow(File input, File output, Predicate<File> matchIncomingFile,
-                                            GenericHandler<File> fileGenericHandler, FileNameGenerator fileNameGenerator) {
-        Assert.state(input.exists(), "the input directory does not exist");
-        Assert.state(output.exists(), "the output directory does not exist");
-        var inbound = Files.inboundAdapter(input)
-                .autoCreateDirectory(true)
-                .filterFunction(matchIncomingFile::test)
-                .preventDuplicates(true);
-        var outbound = Files.outboundAdapter(output)
-                .fileNameGenerator(fileNameGenerator)
-                .fileExistsMode(FileExistsMode.REPLACE)
-                .deleteSourceFiles(true);
-        return IntegrationFlow.from(inbound).handle(File.class, fileGenericHandler).handle(outbound).get();
-    }
-
-}
-
-@Component
-class Engine {
-
-    private final Logger log = LoggerFactory.getLogger(getClass());
-
-
-    File audioToTranscript(YaAiClient ai, File payload, String id) {
-        try {
-            var transcript = ai.transcribe(new FileSystemResource(payload));
-            var tmp = File.createTempFile("transcript-" + id, ".txt");
-            try (var out = new FileWriter(tmp)) {
-                FileCopyUtils.copy(transcript, out);
-            }
-            return tmp;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    boolean isValidFile(File file, Set<String> extensions) {
-        var name = file.getName();
-        var lastIndexOf = name.lastIndexOf(".");
-        Assert.state(lastIndexOf != -1, "there has to be a file extension in the input file");
-        var ext = name.substring(lastIndexOf);
-        return extensions.contains(ext.substring(1).toLowerCase(Locale.ROOT).trim());
-    }
-
-    File videoToAudio(File inputFile, String uid) {
-        try {
-            var uuid = Objects.requireNonNull(uid);
-            var encodedOutputFile = new File(inputFile.getParentFile(), uuid + ".mp3");
-            log.info("encoded output file [" + encodedOutputFile.getAbsolutePath() + "]");
-            var ffmpegCommand = List.of("ffmpeg", "-i", inputFile.getAbsolutePath(),
-                    encodedOutputFile.getAbsolutePath());
-            var exitCode = new ProcessBuilder(ffmpegCommand).inheritIO().start().waitFor();
-            Assert.state(exitCode == 0, "the transcoding process did not exit successfully");
-            Assert.state(encodedOutputFile.exists(),
-                    "the output file [" + encodedOutputFile.getAbsolutePath() + "] was never written");
-            return encodedOutputFile;
-        } //
-        catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
+	@Bean
+	Engine engine() {
+		return new Engine();
+	}
 
 }

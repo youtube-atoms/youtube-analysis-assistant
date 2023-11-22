@@ -11,31 +11,31 @@ import org.springframework.util.FileCopyUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.util.SystemPropertyUtils;
 import ya.ImageSize;
-import ya.YaAiClient;
+import ya.AiClient;
 
 import java.io.FileOutputStream;
 
 @SpringBootTest
-class YaAiClientTest {
+class AnalysisAiClientTestClientClient {
 
 	private final Logger log = LoggerFactory.getLogger(getClass());
 
 	@Test
-	void transcribe(@Autowired YaAiClient yac) {
+	void transcribe(@Autowired AiClient yac) {
 		var transcript = yac.transcribe(new ClassPathResource("sample-audio.mp3"));
 		Assertions.assertTrue(StringUtils.hasText(transcript));
 		log("transcribe", transcript);
 	}
 
 	@Test
-	void talk(@Autowired YaAiClient ya) {
+	void talk(@Autowired AiClient ya) {
 		var joke = ya.chat("tell me a joke?");
 		Assertions.assertTrue(StringUtils.hasText(joke));
 		log("talk", joke);
 	}
 
 	@Test
-	void render(@Autowired YaAiClient yaaClient) throws Exception {
+	void render(@Autowired AiClient yaaClient) throws Exception {
 		var prompt = """
 				Thumbnail Design: A vibrant background with code snippets and the Java coffee cup logo.
 				 The text  "Mastering Java 21 & Spring" in bold, modern font. Icons representing different IDEs

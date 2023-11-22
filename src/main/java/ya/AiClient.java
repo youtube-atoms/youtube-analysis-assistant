@@ -5,7 +5,7 @@ import org.springframework.core.io.Resource;
 /**
  * low level access to AI primitives
  */
-public interface YaAiClient {
+public interface AiClient {
 
 	String transcribe(Resource audio);
 
