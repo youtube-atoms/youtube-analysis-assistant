@@ -57,7 +57,7 @@ class DefaultAnalysisClient implements AnalysisClient {
 
 					    Your second task is to provide your responses to the following inquiries in the form of bullet points:
 
-					    Answer Inquiries Here, being sure to use CDATA sections for all the content you've been instructed to put into XML tags:
+					    Answer Inquiries Here:
 
 						Engaging Title, wrapped in XML tags <engaging-title> and </engaging-title>: Propose a catchy and appealing title that encapsulates the essence of the content.
 						SEO Tags, wrapped in XML tags <seo-tags> and </seo-tags>: Identify a list of SEO-friendly tags that are relevant to the content and could improve its searchability.
