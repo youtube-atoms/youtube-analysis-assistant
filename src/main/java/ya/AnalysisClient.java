@@ -8,7 +8,7 @@ import org.springframework.core.io.Resource;
  */
 public interface AnalysisClient {
 
-	record Analysis(ContentAnalysis analysis, Resource audio, Resource video, Resource image, String transcript) {
+	record Analysis(ContentAnalysis contentAnalysis, Resource audio, Resource video, Resource image, String transcript) {
 		//
 		record ContentAnalysis(String twitter, //
 				@JsonProperty("engaging-title") String engagingTitle, //

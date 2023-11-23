@@ -1,19 +1,24 @@
 package ya;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.util.Assert;
 import org.springframework.util.FileCopyUtils;
-import org.w3c.dom.Element;
+import org.springframework.util.StringUtils;
 
-import javax.xml.parsers.DocumentBuilderFactory;
-import java.io.ByteArrayInputStream;
 import java.io.FileReader;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 class DefaultAnalysisClient implements AnalysisClient {
+
+	private final Logger log = LoggerFactory.getLogger(getClass());
 
 	private final AiClient yac;
 
@@ -38,6 +43,34 @@ class DefaultAnalysisClient implements AnalysisClient {
 		}
 	}
 
+	private String findXmlContent(String body, String tag) {
+		try {
+			Assert.hasText(tag, "the tag can't be empty");
+			Assert.hasText(body, "the body can't be empty");
+			var before = "<" + tag + ">";
+			var after = "</" + tag + ">";
+			Assert.state(body.contains(before) && body.contains(after), "there must be XML tags of the type described in this string");
+			var start = body.indexOf(before) + before.length();
+			var stop = body.indexOf(after);
+			return body.substring(start, stop);
+		}//
+		catch (Throwable throwable) {
+			log.error("couldn't parse [" + body + "] for the XML tag [" + tag + "]");
+			return null;
+		}
+	}
+
+	private Map<String, Object> mapFrom(String xml) {
+		var m = new HashMap<String, Object>();
+		for (var tagName : Set.of("description", "twitter", "linkedin", "viral-potential", "content-enhancement",
+				"thumbnail-design", "seo-tags", "engaging-title", "summary")) {
+			var result = findXmlContent(xml, tagName);
+			if (StringUtils.hasText(result))
+				m.put(tagName, result);
+		}
+		return m;
+	}
+
 	@Override
 	public Analysis analyzeAudio(String id, Resource audio) {
 		try {
@@ -60,7 +93,7 @@ class DefaultAnalysisClient implements AnalysisClient {
 					    Answer Inquiries Here:
 
 						Engaging Title, wrapped in XML tags <engaging-title> and </engaging-title>: Propose a catchy and appealing title that encapsulates the essence of the content.
-						SEO Tags, wrapped in XML tags <seo-tags> and </seo-tags>: Identify a list of SEO-friendly tags that are relevant to the content and could improve its searchability.
+						SEO Tags, wrapped in XML tags <seo-tags> and </seo-tags>: Identify a list of SEO-friendly tags, seperated by commas, that are relevant to the content and could improve its searchability.
 						Thumbnail Design, wrapped in XML tags <thumbnail-design> and </thumbnail-design>: Describe the elements of an eye-catching thumbnail that would compel viewers to click.
 						Content Enhancement, wrapped in XML tags <content-enhancement> and </content-enhancement>: Offer specific suggestions on how the content could be improved for viewer engagement and retention.
 						Viral Potential Segment, wrapped in XML tags <viral-potential> and </viral-potential>: Identify the best section that might have the potential to be engaging or entertaining for a short-form viral video based on factors like humor, uniqueness, relatability, or other notable elements.  Provide the text section and explain why.
@@ -72,30 +105,42 @@ class DefaultAnalysisClient implements AnalysisClient {
 
 			var analysis = "<analysis>" + this.yac.chat(questions.formatted(transcript)) + "</analysis>";
 			System.out.println(analysis);
-			var factory = DocumentBuilderFactory.newInstance();
-			var builder = factory.newDocumentBuilder();
-			var document = builder.parse(new ByteArrayInputStream(analysis.getBytes()));
-			var map = new HashMap<String, Object>();
-			var nodeList = document.getDocumentElement().getChildNodes();
-			for (var i = 0; i < nodeList.getLength(); i++) {
-				if (nodeList.item(i) instanceof Element element) {
-					var tagName = element.getTagName();
-					var textContent = element.getTextContent();
-					map.put(tagName, textContent);
+			var map = mapFrom(analysis);
+
+			for (var k : map.keySet()) {
+				var value = (String) map.get(k);
+				if (StringUtils.hasText(value)) {
+					for (var xml : Set.of("<" + k + ">", "</" + k + ">")) {
+						if (value.contains(xml)) {
+							var parts = value.split(xml);
+							var sb = new StringBuilder();
+							for (var p : parts) sb.append(p);
+							value = sb.toString();
+						}
+					}
 				}
+				map.put(k, value);
 			}
 
-			replace(map, "content-enhancement",
-					input -> input.contains("\n") ? input.split("\n") : new String[] { input });
-			replace(map, "seo-tags", seoTags -> seoTags.contains(",") ? seoTags.split(",") : new String[] { seoTags });
+			replaceMapKey(map, "content-enhancement",
+					input -> cleanArrayOfStrings(input.contains("\n") ? input.split("\n") : new String[]{input}));
+			replaceMapKey(map, "seo-tags", seoTags -> cleanArrayOfStrings(seoTags.contains(",") ? seoTags.split(",") : new String[]{seoTags}));
 
 			for (var st : (String[]) map.get("seo-tags"))
-				System.out.println("st: " + st);
+				log.info("seo tag suggestion: [" + st + ']');
 
 			var thumbnailPrompt = (String) (map.getOrDefault("thumbnail-design", null));
 			var thumbResource = (Resource) (thumbnailPrompt == null ? null
 					: this.yac.render(thumbnailPrompt, ImageSize.SIZE_1024x1792));
+
+			for (var k : map.keySet()) {
+				var v = map.get(k);
+				if (v instanceof String str) {
+					map.put(k, str.trim());
+				}
+			}
 			var json = objectMapper.writeValueAsString(map);
+			log.info("json from serializing the Map<String,Object>: [" + json + "]");
 			var contentAnalysis = objectMapper.readValue(json, Analysis.ContentAnalysis.class);
 			return new Analysis(contentAnalysis, audio, null, thumbResource, transcript);
 		} //
@@ -104,7 +149,15 @@ class DefaultAnalysisClient implements AnalysisClient {
 		}
 	}
 
-	private void replace(Map<String, Object> map, String key, Function<String, String[]> function) {
+	private String[] cleanArrayOfStrings(String[] input) {
+		var list = new ArrayList<String>();
+		for (var i : input)
+			if (StringUtils.hasText(i))
+				list.add(i.trim());
+		return list.toArray(new String[0]);
+	}
+
+	private void replaceMapKey(Map<String, Object> map, String key, Function<String, String[]> function) {
 		if (map.containsKey(key)) {
 			if (map.get(key) instanceof String s) {
 				var arr = function.apply(s);

@@ -37,14 +37,14 @@ class IntegrationsAutoConfiguration {
 			.from(inboundChannelAdapterSpec)//
 			.handle(File.class, (payload, headers) -> {
 				var id = Objects.requireNonNull(headers.getId()).toString();
-				var project = new File(in, id);
-				ensure(project);
-				var payloadToProcess = new File(project, payload.getName());
+				var projectDirectory = new File(in, id);
+				ensure(projectDirectory);
+				var payloadToProcess = new File(projectDirectory, payload.getName());
 				Assert.state(payload.renameTo(payloadToProcess) && payloadToProcess.exists(),
 						"the file [" + payload.getAbsolutePath() + "] you moved to ["
 								+ payloadToProcess.getAbsolutePath() + "] does not exist");
-				var youtubeAnalysis = yac.analyzeVideo(id, new FileSystemResource(payloadToProcess));
-				handleYoutubeAnalysis(project, youtubeAnalysis, objectMapper);
+				var analysis = yac.analyzeVideo(id, new FileSystemResource(payloadToProcess));
+				analyzeVideo(projectDirectory, analysis, objectMapper);
 				return null;
 			})//
 			.get();
@@ -54,13 +54,14 @@ class IntegrationsAutoConfiguration {
 		return new InputStreamResource(new ByteArrayInputStream(transcript.getBytes()));
 	}
 
-	private void handleYoutubeAnalysis(File root, AnalysisClient.Analysis youtubeAnalysis, ObjectMapper objectMapper) {
+	private void analyzeVideo(File root, AnalysisClient.Analysis youtubeAnalysis, ObjectMapper objectMapper) {
 		try {
-			var caJson = objectMapper.writeValueAsString(youtubeAnalysis.analysis());
+
+			var caJson = objectMapper.writeValueAsString(youtubeAnalysis.contentAnalysis());
 
 			var map = Map.of("image.webp", youtubeAnalysis.image(), //
 					"transcript.txt", resourceFor(youtubeAnalysis.transcript()), //
-					"analysis.json", resourceFor(caJson), //
+					"contentAnalysis.json", resourceFor(caJson), //
 					"audio.mp3", youtubeAnalysis.audio()//
 			); //
 			for (var k : map.keySet()) {
